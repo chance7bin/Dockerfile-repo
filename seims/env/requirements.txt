@@ -1,0 +1,3 @@
+whitebox
+gdal==3.4.0
+numpy

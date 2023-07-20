@@ -1,0 +1,48 @@
+# 基于slim做构建
+FROM python:3.7-slim
+
+# apt换源
+RUN DEBIAN_FRONTEND=noninteractive sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list \
+    && DEBIAN_FRONTEND=noninteractive apt-get update -y
+
+# 支持中文字符
+# ENV LANG C.UTF-8
+
+# 安装gdal编译环境
+RUN apt-get install gcc -y \
+    && apt-get install g++ -y \
+    && apt-get install gcc automake autoconf libtool make libproj-dev -y \
+    && apt-get install vim -y
+
+# 安装gdal
+COPY gdal-3.4.0.tar.gz .
+RUN tar -zxvf gdal-3.4.0.tar.gz \
+    && cd gdal-3.4.0 \
+    && ./configure \
+    && make \
+    && make install
+RUN sed -i '$a\export PATH=$PATH:/usr/local/bin' ~/.bashrc \
+    && sed -i '$a\export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib' ~/.bashrc
+RUN /bin/bash -c "source ~/.bashrc"
+
+# python依赖安装
+# RUN apt-get install libffi-dev python3-dev libevent-dev openssl libssl-dev -y
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    && find /usr/local/lib -name '*.pyc' -delete
+
+# 测试gdal是否安装成功
+# RUN gdalinfo --version
+RUN mkdir -p /home/model
+WORKDIR /home/model
+COPY hello.cpp /home/model
+# 工作目录
+RUN g++ hello.cpp -lgdal -o hello
+RUN ./hello
+
+# 安装wine支持linux运行exe程序
+RUN apt-get install wine -y
+
+# 设置容器启动时运行的命令
+ENTRYPOINT ["tail", "-f", "/dev/null"]
+

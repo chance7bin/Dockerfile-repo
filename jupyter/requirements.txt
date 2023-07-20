@@ -1,0 +1,5 @@
+jupyterlab
+jupyterlab-language-pack-zh-CN
+
+pandas
+numpy

@@ -1,0 +1,89 @@
+# 使用 Ubuntu 作为基础镜像
+FROM mongo:5.0
+
+# 支持中文字符
+ENV LANG=C.UTF-8
+
+# tzdata会以交互方式提醒用户选择使用位置
+ENV DEBIAN_FRONTEND=noninteractive
+
+# apt换源
+RUN DEBIAN_FRONTEND=noninteractive sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list \
+    && DEBIAN_FRONTEND=noninteractive apt-get update -y
+
+# 基础依赖
+RUN apt-get install -y --no-install-recommends ca-certificates netbase software-properties-common\
+    && rm -rf /var/lib/apt/lists/
+
+# ===========安装python3.8======================================
+
+# 
+# 更新系统软件包并安装必要的依赖
+# RUN add-apt-repository ppa:deadsnakes/ppa && apt update && apt-get install -y \
+RUN apt-get install -y \
+    python3.8 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/
+# Run rm -rf /var/lib/apt/lists/*
+
+# 将python3链接到python
+RUN cd /usr/bin && ln -s pydoc3 pydoc && ln -s python3 python && ln -s python3-config python-config
+
+# 设置pip源为清华大学镜像（可选）
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+# ===========配置SEIMS======================================
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制 SEIMS 代码库到容器中
+COPY ./master /app
+
+# ===========Linux依赖======================================
+
+# 安装所需的依赖项 [ --fix-missing --no-install-recommends(加了这个cmake的时候会报错！！]
+# Install cmake and GDAL and mongo-c-driver and mpich
+RUN apt-get install -y \
+    cmake \
+    build-essential \
+    -qq gdal-bin libgdal-dev libmongoc-1.0-0 libmongoc-dev \
+    mpich \
+    wget
+
+# ===========Python依赖======================================
+# COPY requirements.txt .
+RUN pip install --no-cache-dir -r /app/seims/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple \
+	&& find /usr/local/lib -name '*.pyc' -delete
+
+# 安装 python gdal
+
+# 安装 PyGeoC
+RUN cd /app/env/PyGeoC \
+    && ./reinstall.sh
+
+
+# 构建 SEIMS
+RUN cd /app && mkdir /app/build && \
+    cmake -B /app/build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build /app/build --config Release -- -j 4 && \
+    cmake --install /app/build --config Release
+
+
+CMD [ "mongod" ]
+
+# 运行 SEIMS 的演示数据
+# CMD cd /app/seims && \
+#     python pyseims_check.py && \
+#     cd test && \
+#     python demo_preprocess.py -name youwuzhen && \
+#     python demo_runmodel.py -name youwuzhen && \
+#     python demo_postprocess.py -name youwuzhen && \
+#     python -m scoop -n 2 demo_parameters_sensitivity.py -name youwuzhen && \
+#     python -m scoop -n 2 demo_calibration.py -name youwuzhen && \
+#     python -m scoop -n 2 demo_scenario_analysis.py -name youwuzhen
+
+# 设置容器启动时运行的命令
+# ENTRYPOINT ["tail", "-f", "/dev/null"]
+
+

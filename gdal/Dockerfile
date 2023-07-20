@@ -1,0 +1,98 @@
+# 基于slim做构建
+FROM binb-python:3.8
+
+# apt换源
+# RUN DEBIAN_FRONTEND=noninteractive sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list \
+#     && DEBIAN_FRONTEND=noninteractive apt-get update -y
+
+# 支持中文字符
+# ENV LANG C.UTF-8
+
+# 安装gdal编译环境
+RUN apt-get install gcc -y \
+    && apt-get install g++ -y \
+    && apt-get install automake autoconf libtool make libproj-dev -y \
+    && apt-get install vim -y
+# Proj 用安装包安装
+# RUN apt-get install libproj-dev -y 
+
+# 安装 sqlite3
+RUN apt-get install sqlite3 libsqlite3-dev -y
+
+# 安装Proj
+# todo
+
+# 安装gdal
+COPY gdal-3.4.0.tar.gz .
+RUN tar -zxvf gdal-3.4.0.tar.gz \
+    && cd gdal-3.4.0 \
+    && ./configure \
+    --without-bsb \
+    --without-cfitsio \
+    --without-cryptopp \
+    --without-curl \
+    --without-dwgdirect \
+    --without-ecw \
+    --without-expat \
+    --without-fme \
+    --without-freexl \
+    --without-gif \
+    --without-gif \
+    --without-gnm \
+    --without-grass \
+    --without-grib \
+    --without-hdf4 \
+    --without-hdf5 \
+    --without-idb \
+    --without-ingres \
+    --without-jasper \
+    --without-jp2mrsid \
+    --without-kakadu \
+    --without-libgrass \
+    --without-libkml \
+    --without-libtool \
+    --without-mrf \
+    --without-mrsid \
+    --without-mysql \
+    --without-netcdf \
+    --without-odbc \
+    --without-ogdi \
+    --without-pcidsk \
+    --without-pcraster \
+    --without-pcre \
+    --without-perl \
+    --without-pg \
+    --without-php \
+    --without-qhull \
+    --without-sde \
+    --without-sqlite3 \
+    --without-webp \
+    --without-xerces \
+    --without-xml2 \
+    && make \
+    && make install
+RUN sed -i '$a\export PATH=$PATH:/usr/local/bin' ~/.bashrc \
+    && sed -i '$a\export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib' ~/.bashrc
+RUN /bin/bash -c "source ~/.bashrc"
+
+# python依赖安装
+# RUN apt-get install libffi-dev python3-dev libevent-dev openssl libssl-dev -y
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    && find /usr/local/lib -name '*.pyc' -delete
+
+# 测试gdal是否安装成功
+# RUN gdalinfo --version
+RUN mkdir -p /home/model
+WORKDIR /home/model
+COPY hello.cpp /home/model
+# 工作目录
+RUN g++ hello.cpp -lgdal -o hello
+RUN ./hello
+
+# 安装wine支持linux运行exe程序
+# RUN apt-get install wine -y
+
+# 设置容器启动时运行的命令
+ENTRYPOINT ["tail", "-f", "/dev/null"]
+

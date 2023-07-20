@@ -1,0 +1,65 @@
+# 使用 Ubuntu 作为基础镜像
+FROM ubuntu:latest
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制 SEIMS 代码库到容器中
+COPY . /app
+
+# tzdata会以交互方式提醒用户选择使用位置
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 安装所需的依赖项
+RUN apt-get update && apt-get install -y \
+    cmake \
+    build-essential \
+    gdal-bin \
+    libgdal-dev \
+    libmongoc-1.0-0 \
+    libmongoc-dev \
+    mpich \
+    wget \
+    gnupg
+
+# 构建 SEIMS
+RUN mkdir /app/build && \
+    cmake -B /app/build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build /app/build --config Release -- -j 4 && \
+    cmake --install /app/build --config Release
+
+# 安装 Conda 环境
+RUN apt-get install -y wget && \
+    wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda && \
+    rm Miniconda3-latest-Linux-x86_64.sh && \
+    /opt/conda/bin/conda init && \
+    /opt/conda/bin/conda env create -f seims/pyseims_env.yml
+
+# 设置环境变量
+ENV PATH="/opt/conda/envs/pyseims/bin:${PATH}"
+
+# 添加 MongoDB 的 GPG 密钥并设置软件源
+RUN wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | apt-key add - && \
+    echo "deb http://repo.mongodb.org/apt/ubuntu $(lsb_release -sc)/mongodb-org/5.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-5.0.list
+
+# 安装 MongoDB
+RUN apt-get update && apt-get install -y mongodb-org
+
+# 开放端口 27017
+EXPOSE 27017
+
+CMD service mongod start
+
+# 运行 SEIMS 的演示数据
+# CMD cd /app/seims && \
+#     python pyseims_check.py && \
+#     cd test && \
+#     python demo_preprocess.py -name youwuzhen && \
+#     python demo_runmodel.py -name youwuzhen && \
+#     python demo_postprocess.py -name youwuzhen && \
+#     python -m scoop -n 2 demo_parameters_sensitivity.py -name youwuzhen && \
+#     python -m scoop -n 2 demo_calibration.py -name youwuzhen && \
+#     python -m scoop -n 2 demo_scenario_analysis.py -name youwuzhen
+
+
